@@ -1,0 +1,15 @@
+{
+  "name": "practice-1",
+  "version": "1.0.0",
+  "private": true,
+  "license": "ISC",
+  "dependencies": {
+    "@solana-developers/helpers": "^2.4.0",
+    "@solana/web3.js": "^1.95.2",
+    "dotenv": "^16.4.5",
+    "esrun": "^3.2.26"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}
