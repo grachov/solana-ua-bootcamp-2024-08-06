@@ -1,9 +1,8 @@
-import 'dotenv/config';
 import { Keypair } from '@solana/web3.js';
 
-const keypair = Keypair.generate();
+const keyPair = Keypair.generate();
 
-console.log(`Public key is: ${keypair.publicKey.toBase58()}`);
+console.log(`Public key is: ${keyPair.publicKey.toBase58()}`);
 console.log(
-  `Private key is: ${JSON.stringify(Object.values(keypair.secretKey))}`,
+  `Private key is: ${JSON.stringify(Object.values(keyPair.secretKey))}`,
 );
