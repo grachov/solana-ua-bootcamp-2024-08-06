@@ -1,3 +1,4 @@
+import { setTimeout } from 'node:timers/promises';
 import 'dotenv/config';
 import {
   createMint,
@@ -10,7 +11,10 @@ import {
   clusterApiUrl,
   Connection,
   Keypair,
-  LAMPORTS_PER_SOL,
+  NONCE_ACCOUNT_LENGTH,
+  sendAndConfirmRawTransaction,
+  sendAndConfirmTransaction,
+  SystemProgram,
   Transaction,
 } from '@solana/web3.js';
 import { airdropIfRequired, getExplorerLink } from '@solana-developers/helpers';
@@ -28,18 +32,15 @@ if (!privateKey) {
 
 const privateKeyAsArray = Uint8Array.from(JSON.parse(privateKey));
 const sender = Keypair.fromSecretKey(privateKeyAsArray);
-const recipient = Keypair.generate();
+const recipient = Keypair.fromSecretKey(
+  Uint8Array.from([
+    56, 75, 59, 35, 107, 212, 226, 125, 246, 226, 118, 79, 20, 153, 141, 66, 17,
+    252, 16, 202, 100, 102, 150, 164, 3, 139, 81, 125, 195, 185, 81, 110, 58,
+    128, 145, 159, 232, 149, 228, 35, 100, 242, 210, 231, 12, 244, 5, 189, 80,
+    76, 149, 52, 229, 128, 17, 53, 11, 172, 68, 79, 201, 53, 93, 249,
+  ]),
+);
 const connection = new Connection(clusterApiUrl('devnet'));
-
-try {
-  airdropIfRequired(
-    connection,
-    recipient.publicKey,
-    1 * LAMPORTS_PER_SOL,
-    0.5 * LAMPORTS_PER_SOL,
-  );
-} catch (error) {}
-
 const tokenMint = await createMint(
   connection,
   sender,
@@ -105,10 +106,41 @@ let transactionLink = getExplorerLink(
 
 console.log(`Mint Token Transaction: ${transactionLink}`);
 
-let latestBlockhash = await connection.getLatestBlockhash();
-const transaction = new Transaction({
+const nonceAccount = Keypair.generate();
+const minimumAmount =
+  await connection.getMinimumBalanceForRentExemption(NONCE_ACCOUNT_LENGTH);
+let transaction = new Transaction();
+
+transaction.add(
+  SystemProgram.createNonceAccount({
+    fromPubkey: sender.publicKey,
+    noncePubkey: nonceAccount.publicKey,
+    authorizedPubkey: sender.publicKey,
+    lamports: minimumAmount,
+  }),
+);
+
+await sendAndConfirmTransaction(connection, transaction, [
+  sender,
+  nonceAccount,
+]);
+
+const { nonce } = await connection.getNonce(
+  nonceAccount.publicKey,
+  'confirmed',
+);
+
+console.log(`Nonce Account Public Key: ${nonceAccount.publicKey.toString()}`);
+
+transaction = new Transaction({
   feePayer: recipient.publicKey,
-  ...latestBlockhash,
+  nonceInfo: {
+    nonceInstruction: SystemProgram.nonceAdvance({
+      authorizedPubkey: sender.publicKey,
+      noncePubkey: nonceAccount.publicKey,
+    }),
+    nonce,
+  },
 });
 
 transaction.add(
@@ -121,12 +153,19 @@ transaction.add(
     TOKEN_PROGRAM_ID,
   ),
 );
+
 transaction.sign(sender);
 
 const serializedMessage = transaction.serializeMessage().toString('base64');
 
 console.log('Sending message to recipient for signing...');
 console.log(`Message: ${serializedMessage}`);
+console.log(`Date: ${new Date().toISOString()}`);
+console.log('Waiting 3 minutes...');
+
+await setTimeout(3 * 60 * 1_000);
+
+console.log(`Date: ${new Date().toISOString()}`);
 console.log('Signing message...');
 
 const messageSignature = nacl.sign.detached(
@@ -143,16 +182,10 @@ transaction.addSignature(recipient.publicKey, Buffer.from(messageSignature));
 
 console.log('Sending transaction...');
 
-transactionSignature = await connection.sendRawTransaction(
+transactionSignature = await sendAndConfirmRawTransaction(
+  connection,
   transaction.serialize(),
 );
-
-latestBlockhash = await connection.getLatestBlockhash();
-
-await connection.confirmTransaction({
-  signature: transactionSignature,
-  ...latestBlockhash,
-});
 
 transactionLink = getExplorerLink(
   'transaction',
