@@ -11,6 +11,7 @@ import {
   clusterApiUrl,
   Connection,
   Keypair,
+  LAMPORTS_PER_SOL,
   NONCE_ACCOUNT_LENGTH,
   sendAndConfirmRawTransaction,
   sendAndConfirmTransaction,
@@ -32,15 +33,18 @@ if (!privateKey) {
 
 const privateKeyAsArray = Uint8Array.from(JSON.parse(privateKey));
 const sender = Keypair.fromSecretKey(privateKeyAsArray);
-const recipient = Keypair.fromSecretKey(
-  Uint8Array.from([
-    56, 75, 59, 35, 107, 212, 226, 125, 246, 226, 118, 79, 20, 153, 141, 66, 17,
-    252, 16, 202, 100, 102, 150, 164, 3, 139, 81, 125, 195, 185, 81, 110, 58,
-    128, 145, 159, 232, 149, 228, 35, 100, 242, 210, 231, 12, 244, 5, 189, 80,
-    76, 149, 52, 229, 128, 17, 53, 11, 172, 68, 79, 201, 53, 93, 249,
-  ]),
-);
+const recipient = Keypair.generate();
 const connection = new Connection(clusterApiUrl('devnet'));
+
+try {
+  airdropIfRequired(
+    connection,
+    recipient.publicKey,
+    1 * LAMPORTS_PER_SOL,
+    0.5 * LAMPORTS_PER_SOL,
+  );
+} catch (error) {}
+
 const tokenMint = await createMint(
   connection,
   sender,
